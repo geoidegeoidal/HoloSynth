@@ -1,104 +1,73 @@
-# HoloSynth
+# React + TypeScript + Vite
 
-> A spatial web synthesizer controlled by your hands — no hardware required.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-![React](https://img.shields.io/badge/React-19-61dafb?style=flat&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178c6?style=flat&logo=typescript)
-![Three.js](https://img.shields.io/badge/Three.js-R3F-000000?style=flat&logo=three.js)
-![Tone.js](https://img.shields.io/badge/Audio-Tone.js-000?style=flat)
-![MediaPipe](https://img.shields.io/badge/Vision-MediaPipe-ff6f00?style=flat)
+Currently, two official plugins are available:
 
-## What is HoloSynth?
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-HoloSynth transforms your webcam into a **holographic synthesizer interface**. Move your hands in space to control sound and visuals in real-time — all running 100% in the browser, zero server-side processing.
+## React Compiler
 
-```
-[Webcam] → [MediaPipe Hand Tracking] → [Spatial Math] → [Zustand Store] → [R3F + Tone.js]
-```
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## Features
+## Expanding the ESLint configuration
 
-- **Hand-controlled synthesis** — Right hand position maps to pitch (angle) and volume/filter (radius)
-- **Gesture recognition** — Left hand gestures (pinch, fist, open) trigger visual effects and control a loop recorder
-- **Holographic 3D visuals** — Synthwave-inspired scene with toroidal rings, particle fields, and neon grids
-- **Post-processing effects** — Bloom, chromatic aberration, and vignette for that retro-futuristic aesthetic
-- **Built-in looper** — Record and layer musical phrases with hand gestures, up to 4 bars
-- **Fully client-side** — No API keys, no servers, no latency. Everything runs in your browser
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-## Architecture
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-HoloSynth is built with a clean modular architecture separated into 3 core domains:
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-| Domain | Tech | Responsibility |
-|---|---|---|
-| **Vision** | MediaPipe Tasks Vision | Hand landmark detection, spatial math, gesture recognition |
-| **Audio** | Tone.js | PolySynth engine, quantized scales, loop recording |
-| **Visual** | React Three Fiber + Drei | 3D scene, reactive components, post-processing |
-
-All modules communicate through a shared **Zustand store** with a strict data contract — ensuring type safety and minimal re-renders.
-
-## Tech Stack
-
-- **Vite** + **React 19** + **TypeScript** (strict mode)
-- **Zustand** — State management with atomic selectors
-- **React Three Fiber** + **Drei** — Declarative 3D scene graph
-- **Tone.js** — Web Audio synthesis engine
-- **MediaPipe Tasks Vision** — On-device hand tracking via WASM
-- **@react-three/postprocessing** — Bloom, chromatic aberration, vignette
-
-## Scale & Quantization
-
-- **Scale:** Minor pentatonic across 2 octaves (C3–C5)
-  `C3, Eb3, F3, G3, Bb3, C4, Eb4, F4, G4, Bb4, C5`
-- **Angle (0°–360°)** → Note index (11 quantized steps)
-- **Radius (0–1)** → VCA gain + LPF cutoff (200Hz–8kHz exponential)
-
-## Gestures
-
-| Gesture | Action |
-|---|---|
-| **Right hand move** | Control pitch (angle) and volume/filter (radius) |
-| **Left hand pinch** | Start/stop loop recording |
-| **Left hand fist** | Mute the loop |
-| **Left hand open** | Unmute the loop |
-
-## Getting Started
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Production build
-npm run build
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-## Project Structure
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
-src/
-├── types.ts                    # Shared data contract (immutable)
-├── store/
-│   └── useHoloStore.ts         # Zustand state management
-├── modules/
-│   ├── vision/                 # Hand tracking & gestures
-│   │   ├── handLandmarker.ts
-│   │   ├── spatialMath.ts
-│   │   ├── gestureDetector.ts
-│   │   └── HandTracker.tsx
-│   ├── audio/                  # Synthesis engine
-│   │   ├── synthCore.ts
-│   │   ├── AudioEngine.tsx
-│   │   └── looper.ts
-│   └── visual/                 # 3D scene & effects
-│       ├── SynthCanvas.tsx
-│       ├── PostEffects.tsx
-│       └── components/
-└── App.tsx                     # App shell with lazy-loaded modules
-```
-
-## License
-
-MIT
