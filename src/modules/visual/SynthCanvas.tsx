@@ -3,11 +3,9 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import {
   HoloTorus,
-  PositionIndicator,
   RetroGrid,
   ParticleField,
 } from './components/SceneElements';
-import { GestureEffects } from './components/GestureEffects';
 import { PostEffects } from './PostEffects';
 
 /**
@@ -36,10 +34,8 @@ export const SynthCanvas: React.FC = () => {
 
         {/* Escena */}
         <HoloTorus />
-        <PositionIndicator />
         <RetroGrid />
         <ParticleField />
-        <GestureEffects />
 
         {/* Post-procesamiento */}
         <PostEffects />

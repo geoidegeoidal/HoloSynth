@@ -1,12 +1,13 @@
 import * as Tone from 'tone';
+import type { KnobValues, FaderValues } from '../../types';
 
-const SCALE: readonly string[] = [
+export const SCALE: readonly string[] = [
   'C3', 'D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3',
   'C4', 'D4', 'Eb4', 'F4', 'G4', 'A4', 'Bb4',
   'C5',
 ] as const;
 
-const MIN_FILTER_FREQ = 200;
+const MIN_FILTER_FREQ = 100;
 const MAX_FILTER_FREQ = 8000;
 
 export interface SynthNodes {
@@ -16,10 +17,10 @@ export interface SynthNodes {
   delay: Tone.PingPongDelay;
   reverb: Tone.Reverb;
   gain: Tone.Gain;
+  lfo: Tone.LFO;
 }
 
 let nodes: SynthNodes | null = null;
-let currentNote: string | null = null;
 
 export function createSynthChain(): SynthNodes {
   if (nodes) return nodes;
@@ -47,6 +48,15 @@ export function createSynthChain(): SynthNodes {
     Q: 3,
   });
 
+  const lfo = new Tone.LFO({
+    type: 'sine',
+    min: MIN_FILTER_FREQ,
+    max: MIN_FILTER_FREQ + 1000,
+    frequency: 2,
+  });
+  lfo.connect(filter.frequency);
+  lfo.start();
+
   const distortion = new Tone.Distortion({
     distortion: 0.12,
     wet: 0.2,
@@ -63,60 +73,86 @@ export function createSynthChain(): SynthNodes {
     wet: 0.45,
   });
 
-  const gain = new Tone.Gain(0);
+  const gain = new Tone.Gain(0.8);
 
   synth.chain(filter, distortion, delay, reverb, gain, Tone.getDestination());
 
-  nodes = { synth, filter, distortion, delay, reverb, gain };
+  nodes = { synth, filter, distortion, delay, reverb, gain, lfo };
   return nodes;
 }
 
-export function angleToNote(angle: number): string {
-  const idx = Math.floor((angle / 360) * SCALE.length) % SCALE.length;
-  return SCALE[idx]!;
+export function getSynthNodes(): SynthNodes | null {
+  return nodes;
 }
 
-export function radiusToFilterFreq(radius: number): number {
-  return MIN_FILTER_FREQ * Math.pow(MAX_FILTER_FREQ / MIN_FILTER_FREQ, radius);
-}
-
-export function updateSynthParams(
-  angle: number,
-  radius: number,
-  isVisible: boolean,
-): void {
+export function triggerSynthNote(note: string, velocity = 1.0): void {
   if (!nodes) return;
-
-  const targetGain = isVisible ? Math.pow(radius, 1.5) : 0;
-  nodes.gain.gain.rampTo(targetGain, 0.08);
-
-  nodes.filter.frequency.rampTo(radiusToFilterFreq(radius), 0.08);
-
-  const note = angleToNote(angle);
-
-  if (isVisible && note !== currentNote) {
-    if (currentNote) {
-      nodes.synth.triggerRelease(currentNote, Tone.now());
-    }
-    nodes.synth.triggerAttack(note, Tone.now());
-    currentNote = note;
-  }
-
-  if (!isVisible && currentNote) {
-    nodes.synth.triggerRelease(currentNote, Tone.now());
-    currentNote = null;
-  }
+  nodes.synth.triggerAttack(note, Tone.now(), velocity);
 }
 
-export function releaseAll(): void {
+export function releaseSynthNote(note: string): void {
+  if (!nodes) return;
+  nodes.synth.triggerRelease(note, Tone.now());
+}
+
+export function releaseAllSynthNotes(): void {
   if (!nodes) return;
   nodes.synth.releaseAll();
-  currentNote = null;
+}
+
+export function updateKnobParams(knobs: KnobValues): void {
+  if (!nodes) return;
+
+  const freq = MIN_FILTER_FREQ * Math.pow(MAX_FILTER_FREQ / MIN_FILTER_FREQ, knobs.cutoff);
+  nodes.filter.frequency.rampTo(freq, 0.05);
+  nodes.filter.set({ Q: 0.5 + knobs.resonance * 15 });
+
+  nodes.lfo.frequency.rampTo(0.1 + knobs.lfoRate * 15, 0.05);
+  nodes.lfo.set({
+    min: MIN_FILTER_FREQ,
+    max: MIN_FILTER_FREQ + knobs.lfoDepth * 5000,
+  });
+
+  nodes.distortion.set({
+    distortion: knobs.drive * 1.5,
+    wet: knobs.drive * 0.8,
+  });
+
+  nodes.delay.set({
+    wet: knobs.delay,
+  });
+
+  nodes.reverb.set({
+    wet: knobs.reverb * 0.8,
+    decay: 0.5 + knobs.reverb * 10,
+  });
+
+  nodes.gain.gain.rampTo(0.3 + knobs.pan * 0.7, 0.05);
+}
+
+export function updateFaderParams(faders: FaderValues): void {
+  if (!nodes) return;
+
+  nodes.synth.set({
+    envelope: {
+      attack: faders.attack * 3,
+      decay: faders.decay * 2,
+      sustain: faders.sustain,
+      release: faders.release * 4,
+    },
+  });
+}
+
+export function updatePitchBend(value: number): void {
+  if (!nodes) return;
+  nodes.synth.set({ detune: value * 200 });
 }
 
 export function disposeSynthChain(): void {
   if (!nodes) return;
-  releaseAll();
+  releaseAllSynthNotes();
+  nodes.lfo.stop();
+  nodes.lfo.dispose();
   nodes.synth.dispose();
   nodes.filter.dispose();
   nodes.distortion.dispose();
@@ -126,4 +162,9 @@ export function disposeSynthChain(): void {
   nodes = null;
 }
 
-export { SCALE };
+export function midiNoteToName(midi: number): string {
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const octave = Math.floor(midi / 12) - 1;
+  const note = noteNames[midi % 12];
+  return `${note}${octave}`;
+}

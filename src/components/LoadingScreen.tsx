@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useIsReady } from '../store/useHoloStore';
+import { useIsReady } from '../store/useSynthStore';
 
 const KEYFRAMES = `
 @keyframes holoPulse {
@@ -45,7 +45,7 @@ export const LoadingScreen = () => {
           </div>
           <h1 style={styles.title}>HoloSynth</h1>
           <p style={styles.subtitle}>
-            {isReady ? 'Ready' : 'Initializing hand tracking model...'}
+            {isReady ? 'Ready' : 'Initializing audio engine...'}
           </p>
           <div style={styles.bar}>
             <div style={{ ...styles.barFill, animation: 'holoPulse 1.5s ease-in-out infinite' }} />

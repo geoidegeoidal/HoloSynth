@@ -1,33 +1,45 @@
-export interface HandCoordinates {
-  x: number;
-  y: number;
-  z: number;
+export interface KnobValues {
+  cutoff: number;
+  resonance: number;
+  lfoRate: number;
+  lfoDepth: number;
+  delay: number;
+  reverb: number;
+  drive: number;
+  pan: number;
 }
 
-export interface RightHandData {
-  isVisible: boolean;
-  angle: number;
-  radius: number;
-  rawCentroid: HandCoordinates;
+export interface FaderValues {
+  attack: number;
+  decay: number;
+  sustain: number;
+  release: number;
 }
-
-export type LeftHandGesture = 'none' | 'pinch' | 'open' | 'fist';
-
-export type CameraStatus = 'waiting' | 'active' | 'error' | 'denied';
 
 export type LooperState = 'idle' | 'recording' | 'playing' | 'muted';
 
-export interface HoloSynthState {
+export interface MinilabState {
   isReady: boolean;
-  rightHand: RightHandData;
-  leftHandGesture: LeftHandGesture;
-  cameraStatus: CameraStatus;
-  currentNote: string;
+  activeNotes: Set<string>;
+  octaveOffset: number;
+  pitchBend: number;
+  modulation: number;
+  knobs: KnobValues;
+  faders: FaderValues;
+  activePads: Set<number>;
   looperState: LooperState;
-  setRightHandData: (data: Partial<RightHandData>) => void;
-  setLeftHandGesture: (gesture: LeftHandGesture) => void;
+  currentNote: string;
+
+  triggerNote: (note: string) => void;
+  releaseNote: (note: string) => void;
+  releaseAllNotes: () => void;
+  triggerPad: (padId: number) => void;
+  setKnob: (id: keyof KnobValues, value: number) => void;
+  setFader: (id: keyof FaderValues, value: number) => void;
+  setPitchBend: (value: number) => void;
+  setModulation: (value: number) => void;
+  setOctaveOffset: (offset: number) => void;
   setReady: (status: boolean) => void;
-  setCameraStatus: (status: CameraStatus) => void;
   setCurrentNote: (note: string) => void;
   setLooperState: (state: LooperState) => void;
 }

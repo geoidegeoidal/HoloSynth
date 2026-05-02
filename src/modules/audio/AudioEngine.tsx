@@ -1,56 +1,36 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import {
   createSynthChain,
-  updateSynthParams,
+  triggerSynthNote,
+  releaseSynthNote,
+  releaseAllSynthNotes,
+  updateKnobParams,
+  updateFaderParams,
+  updatePitchBend,
   disposeSynthChain,
-  angleToNote,
 } from './synthCore';
-import { initLooper, recordNote, updateLooper, disposeLooper, toggleRecord, toggleMute, clearLoop } from './looper';
-import { useHoloStore } from '../../store/useHoloStore';
+import { initLooper, toggleRecord, toggleMute, clearLoop, disposeLooper, updateLooperWaveform } from './looper';
+import { useSynthStore } from '../../store/useSynthStore';
 
 export const AudioEngine: React.FC = () => {
   const audioStartedRef = useRef(false);
-  const rafIdRef = useRef<number>(0);
-  const prevNoteRef = useRef<string | null>(null);
-
-  const startAudioContext = useCallback(async () => {
-    if (audioStartedRef.current) return;
-    try {
-      await Tone.start();
-      createSynthChain();
-      initLooper();
-      audioStartedRef.current = true;
-
-      const tick = () => {
-        const { rightHand, leftHandGesture } = useHoloStore.getState();
-        updateSynthParams(rightHand.angle, rightHand.radius, rightHand.isVisible);
-
-        const note = rightHand.isVisible ? angleToNote(rightHand.angle) : '';
-        useHoloStore.getState().setCurrentNote(note);
-
-        if (rightHand.isVisible) {
-          if (note !== prevNoteRef.current) {
-            recordNote(rightHand.angle);
-            prevNoteRef.current = note;
-          }
-        } else {
-          prevNoteRef.current = null;
-        }
-
-        updateLooper(leftHandGesture);
-
-        rafIdRef.current = requestAnimationFrame(tick);
-      };
-      rafIdRef.current = requestAnimationFrame(tick);
-    } catch (err) {
-      console.error('Error starting audio context:', err);
-    }
-  }, []);
+  const prevNotesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const startHandler = () => {
-      void startAudioContext();
+      if (audioStartedRef.current) return;
+      Tone.start()
+        .then(() => {
+          createSynthChain();
+          initLooper();
+          audioStartedRef.current = true;
+          useSynthStore.getState().setReady(true);
+        })
+        .catch((err) => {
+          console.error('Error starting audio context:', err);
+        });
+
       window.removeEventListener('click', startHandler);
       window.removeEventListener('touchstart', startHandler);
       window.removeEventListener('keydown', startHandler);
@@ -73,16 +53,76 @@ export const AudioEngine: React.FC = () => {
 
     window.addEventListener('keydown', keyHandler);
 
+    refreshWaveform();
+
+    // Subscribe to activeNotes changes for note triggering
+    const unsubNotes = useSynthStore.subscribe(
+      (state) => state.activeNotes,
+      (activeNotes) => {
+        const prevNotes = prevNotesRef.current;
+
+        for (const note of activeNotes) {
+          if (!prevNotes.has(note)) {
+            triggerSynthNote(note);
+          }
+        }
+
+        for (const note of prevNotes) {
+          if (!activeNotes.has(note)) {
+            releaseSynthNote(note);
+          }
+        }
+
+        prevNotesRef.current = new Set(activeNotes);
+      },
+    );
+
+    // Subscribe to knob changes
+    const unsubKnobs = useSynthStore.subscribe(
+      (state) => state.knobs,
+      (knobs) => updateKnobParams(knobs),
+    );
+
+    // Subscribe to fader changes
+    const unsubFaders = useSynthStore.subscribe(
+      (state) => state.faders,
+      (faders) => updateFaderParams(faders),
+    );
+
+    // Subscribe to pitch bend changes
+    const unsubPitchBend = useSynthStore.subscribe(
+      (state) => state.pitchBend,
+      (pitchBend) => updatePitchBend(pitchBend),
+    );
+
     return () => {
       window.removeEventListener('click', startHandler);
       window.removeEventListener('touchstart', startHandler);
       window.removeEventListener('keydown', startHandler);
       window.removeEventListener('keydown', keyHandler);
-      cancelAnimationFrame(rafIdRef.current);
+
+      unsubNotes();
+      unsubKnobs();
+      unsubFaders();
+      unsubPitchBend();
+
+      releaseAllSynthNotes();
       disposeLooper();
       disposeSynthChain();
+      audioStartedRef.current = false;
     };
-  }, [startAudioContext]);
+  }, []);
 
   return null;
 };
+
+let waveformRafId = 0;
+
+function refreshWaveform() {
+  cancelAnimationFrame(waveformRafId);
+  const tick = () => {
+    updateLooperWaveform();
+    waveformRafId = requestAnimationFrame(tick);
+  };
+  waveformRafId = requestAnimationFrame(tick);
+}

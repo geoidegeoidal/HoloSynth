@@ -1,53 +1,58 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useAngle, useRadius, useIsVisible } from '../../../store/useHoloStore';
+import { useActiveNotes } from '../../../store/useSynthStore';
 
-/**
- * Toroide central emisivo cyan/magenta con brillo reactivo al radius.
- */
 export const HoloTorus: React.FC = () => {
   const meshRef = useRef<THREE.Mesh>(null);
-  const radius = useRadius();
-  const isVisible = useIsVisible();
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+  const activeNotes = useActiveNotes();
+  const hasActiveNotes = activeNotes.size > 0;
 
   const material = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0x00ffff),
-        emissive: new THREE.Color(0x00ffff),
-        emissiveIntensity: 0.3,
-        metalness: 0.8,
-        roughness: 0.2,
-        transparent: true,
-        opacity: 1.0,
-      }),
+    () => new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0x00ffff),
+      emissive: new THREE.Color(0x00ffff),
+      emissiveIntensity: 0.3,
+      metalness: 0.8,
+      roughness: 0.2,
+      transparent: true,
+      opacity: 1.0,
+    }),
     [],
   );
 
+  useEffect(() => {
+    materialRef.current = material;
+  }, [material]);
+
+  const elapsedRef = useRef(0);
+
   useFrame((_state, delta) => {
     const mesh = meshRef.current;
-    if (!mesh) return;
+    const mat = materialRef.current;
+    if (!mesh || !mat) return;
 
-    // Rotación idle
+    elapsedRef.current += delta;
+
     mesh.rotation.x += delta * 0.15;
     mesh.rotation.y += delta * 0.25;
 
-    // Intensidad de emisión reactiva al radius
-    const targetIntensity = isVisible ? 0.3 + radius * 2.5 : 0.3;
-    material.emissiveIntensity = THREE.MathUtils.lerp(
-      material.emissiveIntensity,
+    const pulse = hasActiveNotes ? 1.5 + Math.sin(elapsedRef.current * 6) * 0.8 : 0.3;
+    const targetIntensity = 0.3 + pulse;
+    mat.emissiveIntensity = THREE.MathUtils.lerp(
+      mat.emissiveIntensity,
       targetIntensity,
       0.1,
     );
 
-    // Shift de color: cyan → magenta con radius
-    const hue = THREE.MathUtils.lerp(0.5, 0.85, radius);
-    material.emissive.setHSL(hue, 1.0, 0.5);
+    const hue = hasActiveNotes
+      ? THREE.MathUtils.lerp(0.5, 0.85, 0.5 + Math.sin(elapsedRef.current * 3) * 0.5)
+      : 0.5;
+    mat.emissive.setHSL(hue, 1.0, 0.5);
 
-    // Opacidad general cuando la mano es visible
-    const targetOpacity = isVisible ? 1.0 : 0.4;
-    material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.08);
+    const targetOpacity = hasActiveNotes ? 1.0 : 0.4;
+    mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetOpacity, 0.08);
   });
 
   return (
@@ -57,64 +62,12 @@ export const HoloTorus: React.FC = () => {
   );
 };
 
-/**
- * Esfera indicadora que orbita el toroide siguiendo angle/radius del store.
- */
-export const PositionIndicator: React.FC = () => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const angle = useAngle();
-  const radius = useRadius();
-  const isVisible = useIsVisible();
-
-  const material = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xff00ff),
-        emissive: new THREE.Color(0xff00ff),
-        emissiveIntensity: 2.0,
-        transparent: true,
-        opacity: 1.0,
-      }),
-    [],
-  );
-
-  useFrame(() => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-
-    const rad = (angle * Math.PI) / 180;
-    const orbitRadius = 1.8 + radius * 0.8;
-
-    mesh.position.x = Math.cos(rad) * orbitRadius;
-    mesh.position.y = Math.sin(rad) * orbitRadius;
-    mesh.position.z = 0;
-
-    // Escala reactiva al radius
-    const scale = 0.08 + radius * 0.18;
-    mesh.scale.setScalar(scale);
-
-    // Opacidad
-    const targetOpacity = isVisible ? 1.0 : 0.0;
-    material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.12);
-  });
-
-  return (
-    <mesh ref={meshRef} material={material}>
-      <sphereGeometry args={[1, 24, 24]} />
-    </mesh>
-  );
-};
-
-/**
- * Grid de suelo retro-synthwave.
- */
 export const RetroGrid: React.FC = () => {
   const meshRef = useRef<THREE.Mesh>(null);
 
   useFrame((_state, delta) => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    // Scroll sutil del grid
     const mat = mesh.material as THREE.MeshBasicMaterial;
     if (mat.map) {
       mat.map.offset.y -= delta * 0.05;
@@ -134,20 +87,28 @@ export const RetroGrid: React.FC = () => {
   );
 };
 
-/**
- * Campo de partículas ambientales flotantes.
- */
+const generateParticlePositions = (n: number): Float32Array => {
+  const pos = new Float32Array(n * 3);
+  const seed = 42;
+  let s = seed;
+  const pseudoRandom = (): number => {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+  for (let i = 0; i < n; i++) {
+    pos[i * 3] = (pseudoRandom() - 0.5) * 20;
+    pos[i * 3 + 1] = (pseudoRandom() - 0.5) * 12;
+    pos[i * 3 + 2] = (pseudoRandom() - 0.5) * 20;
+  }
+  return pos;
+};
+
 export const ParticleField: React.FC = () => {
   const pointsRef = useRef<THREE.Points>(null);
 
   const { positions, count } = useMemo(() => {
     const n = 600;
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 20;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 12;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 20;
-    }
+    const pos = generateParticlePositions(n);
     return { positions: pos, count: n };
   }, []);
 

@@ -1,8 +1,6 @@
 import * as Tone from 'tone';
-import { angleToNote } from './synthCore';
-import { useHoloStore } from '../../store/useHoloStore';
+import { useSynthStore } from '../../store/useSynthStore';
 import type { LooperState } from '../../types';
-import type { LeftHandGesture } from '../../types';
 
 interface LoopEvent {
   time: number;
@@ -17,7 +15,6 @@ let looperState: LooperState = 'idle';
 let recordBuffer: LoopEvent[] = [];
 let recordStartTime = 0;
 let loopPart: Tone.Part | null = null;
-let previousGesture: LeftHandGesture = 'none';
 let loopSynth: Tone.PolySynth | null = null;
 let loopFilter: Tone.Filter | null = null;
 let loopGain: Tone.Gain | null = null;
@@ -41,7 +38,7 @@ function startRecording(): void {
   recordBuffer = [];
   recordStartTime = Tone.now();
   looperState = 'recording';
-  useHoloStore.getState().setLooperState('recording');
+  useSynthStore.getState().setLooperState('recording');
 
   if (Tone.getTransport().state !== 'started') {
     Tone.getTransport().start();
@@ -51,7 +48,7 @@ function startRecording(): void {
 function stopRecordingAndPlay(): void {
   if (recordBuffer.length === 0) {
     looperState = 'idle';
-    useHoloStore.getState().setLooperState('idle');
+    useSynthStore.getState().setLooperState('idle');
     return;
   }
 
@@ -62,7 +59,7 @@ function stopRecordingAndPlay(): void {
 
   if (!loopSynth) {
     looperState = 'idle';
-    useHoloStore.getState().setLooperState('idle');
+    useSynthStore.getState().setLooperState('idle');
     return;
   }
 
@@ -75,7 +72,7 @@ function stopRecordingAndPlay(): void {
   loopPart.start(0);
 
   looperState = 'playing';
-  useHoloStore.getState().setLooperState('playing');
+  useSynthStore.getState().setLooperState('playing');
 }
 
 function stopPlayback(): void {
@@ -91,7 +88,7 @@ function muteLoop(): void {
     loopPart.mute = true;
   }
   looperState = 'muted';
-  useHoloStore.getState().setLooperState('muted');
+  useSynthStore.getState().setLooperState('muted');
 }
 
 function unmuteLoop(): void {
@@ -99,11 +96,14 @@ function unmuteLoop(): void {
     loopPart.mute = false;
   }
   looperState = 'playing';
-  useHoloStore.getState().setLooperState('playing');
+  useSynthStore.getState().setLooperState('playing');
 }
 
-export function recordNote(angle: number): void {
+export function recordCurrentNote(): void {
   if (looperState !== 'recording') return;
+
+  const note = useSynthStore.getState().currentNote;
+  if (!note) return;
 
   const elapsed = Tone.now() - recordStartTime;
   if (elapsed > MAX_LOOP_DURATION_S) {
@@ -113,32 +113,20 @@ export function recordNote(angle: number): void {
 
   recordBuffer.push({
     time: elapsed,
-    note: angleToNote(angle),
+    note,
     duration: NOTE_DURATION,
   });
 }
 
-export function updateLooper(gesture: LeftHandGesture): void {
-  if (gesture === previousGesture) return;
+export function updateLooperWaveform(): void {
+  const state = useSynthStore.getState();
 
-  const prev = previousGesture;
-  previousGesture = gesture;
+  if (state.looperState === 'recording' && state.currentNote) {
+    recordCurrentNote();
+  }
 
-  switch (looperState) {
-    case 'idle':
-      if (gesture === 'pinch') startRecording();
-      break;
-    case 'recording':
-      if (gesture === 'open' || (prev === 'pinch' && gesture !== 'pinch')) stopRecordingAndPlay();
-      break;
-    case 'playing':
-      if (gesture === 'fist') muteLoop();
-      else if (gesture === 'pinch') startRecording();
-      break;
-    case 'muted':
-      if (gesture === 'open') unmuteLoop();
-      else if (gesture === 'pinch') startRecording();
-      break;
+  if (looperState !== state.looperState) {
+    looperState = state.looperState;
   }
 }
 
@@ -162,7 +150,7 @@ export function clearLoop(): void {
   stopPlayback();
   recordBuffer = [];
   looperState = 'idle';
-  useHoloStore.getState().setLooperState('idle');
+  useSynthStore.getState().setLooperState('idle');
 }
 
 export function getLooperState(): LooperState {
@@ -187,8 +175,7 @@ export function disposeLooper(): void {
   stopPlayback();
   recordBuffer = [];
   looperState = 'idle';
-  previousGesture = 'none';
-  useHoloStore.getState().setLooperState('idle');
+  useSynthStore.getState().setLooperState('idle');
   if (loopSynth) {
     loopSynth.dispose();
     loopSynth = null;
