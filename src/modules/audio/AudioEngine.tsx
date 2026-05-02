@@ -1,128 +1,55 @@
-import React, { useEffect, useRef } from 'react';
-import * as Tone from 'tone';
-import {
-  createSynthChain,
-  triggerSynthNote,
-  releaseSynthNote,
-  releaseAllSynthNotes,
-  updateKnobParams,
-  updateFaderParams,
-  updatePitchBend,
-  disposeSynthChain,
-} from './synthCore';
-import { initLooper, toggleRecord, toggleMute, clearLoop, disposeLooper, updateLooperWaveform } from './looper';
+import React, { useEffect, useState } from 'react';
+import { engine } from './minilabEngine';
+import { drumMachine } from './drumMachine';
 import { useSynthStore } from '../../store/useSynthStore';
 
+/**
+ * AudioEngine — Componente sin UI que inicializa y gestiona el contexto de Audio.
+ * El motor DSP en sí (Tone.js) reacciona mediante suscripciones a Zustand.
+ */
 export const AudioEngine: React.FC = () => {
-  const audioStartedRef = useRef(false);
-  const prevNotesRef = useRef<Set<string>>(new Set());
+  const [isAudioReady, setIsAudioReady] = useState(false);
 
+  // Auto-init on first interaction
   useEffect(() => {
-    const startHandler = () => {
-      if (audioStartedRef.current) return;
-      Tone.start()
-        .then(() => {
-          createSynthChain();
-          initLooper();
-          audioStartedRef.current = true;
-          useSynthStore.getState().setReady(true);
-        })
-        .catch((err) => {
-          console.error('Error starting audio context:', err);
-        });
-
-      window.removeEventListener('click', startHandler);
-      window.removeEventListener('touchstart', startHandler);
-      window.removeEventListener('keydown', startHandler);
-    };
-
-    window.addEventListener('click', startHandler);
-    window.addEventListener('touchstart', startHandler);
-    window.addEventListener('keydown', startHandler);
-
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        toggleRecord();
-      } else if (e.code === 'KeyM') {
-        toggleMute();
-      } else if (e.code === 'KeyC') {
-        clearLoop();
+    const initAudio = async () => {
+      if (!isAudioReady) {
+        await engine.initialize();
+        await drumMachine.initialize();
+        setIsAudioReady(true);
+        useSynthStore.getState().setReady(true);
       }
     };
 
-    window.addEventListener('keydown', keyHandler);
-
-    refreshWaveform();
-
-    // Subscribe to activeNotes changes for note triggering
-    const unsubNotes = useSynthStore.subscribe(
-      (state) => state.activeNotes,
-      (activeNotes) => {
-        const prevNotes = prevNotesRef.current;
-
-        for (const note of activeNotes) {
-          if (!prevNotes.has(note)) {
-            triggerSynthNote(note);
-          }
-        }
-
-        for (const note of prevNotes) {
-          if (!activeNotes.has(note)) {
-            releaseSynthNote(note);
-          }
-        }
-
-        prevNotesRef.current = new Set(activeNotes);
-      },
-    );
-
-    // Subscribe to knob changes
-    const unsubKnobs = useSynthStore.subscribe(
-      (state) => state.knobs,
-      (knobs) => updateKnobParams(knobs),
-    );
-
-    // Subscribe to fader changes
-    const unsubFaders = useSynthStore.subscribe(
-      (state) => state.faders,
-      (faders) => updateFaderParams(faders),
-    );
-
-    // Subscribe to pitch bend changes
-    const unsubPitchBend = useSynthStore.subscribe(
-      (state) => state.pitchBend,
-      (pitchBend) => updatePitchBend(pitchBend),
-    );
+    window.addEventListener('mousedown', initAudio);
+    window.addEventListener('keydown', initAudio);
 
     return () => {
-      window.removeEventListener('click', startHandler);
-      window.removeEventListener('touchstart', startHandler);
-      window.removeEventListener('keydown', startHandler);
-      window.removeEventListener('keydown', keyHandler);
-
-      unsubNotes();
-      unsubKnobs();
-      unsubFaders();
-      unsubPitchBend();
-
-      releaseAllSynthNotes();
-      disposeLooper();
-      disposeSynthChain();
-      audioStartedRef.current = false;
+      window.removeEventListener('mousedown', initAudio);
+      window.removeEventListener('keydown', initAudio);
     };
+  }, [isAudioReady]);
+
+  // Hook activeNotes back to synthEngine
+  // (We do it here to avoid subscribing to Sets inside the vanilla TS engine class which is tricky)
+  useEffect(() => {
+    const unsubscribe = useSynthStore.subscribe((state, prevState) => {
+      // Find new notes
+      for (const note of state.activeNotes) {
+        if (!prevState.activeNotes.has(note)) {
+          engine.triggerAttack(note);
+        }
+      }
+      // Find released notes
+      for (const note of prevState.activeNotes) {
+        if (!state.activeNotes.has(note)) {
+          engine.triggerRelease(note);
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return null;
 };
-
-let waveformRafId = 0;
-
-function refreshWaveform() {
-  cancelAnimationFrame(waveformRafId);
-  const tick = () => {
-    updateLooperWaveform();
-    waveformRafId = requestAnimationFrame(tick);
-  };
-  waveformRafId = requestAnimationFrame(tick);
-}

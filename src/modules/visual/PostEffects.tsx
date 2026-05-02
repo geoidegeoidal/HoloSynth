@@ -7,7 +7,6 @@ import {
 } from '@react-three/postprocessing';
 import { Vector2 } from 'three';
 
-const chromaticOffset = new Vector2(0.002, 0.002);
 
 /**
  * PostEffects — Pipeline de post-procesamiento Synthwave.
@@ -22,18 +21,18 @@ export const PostEffects: React.FC = () => {
   return (
     <EffectComposer enableNormalPass={false}>
       <Bloom
-        intensity={1.5}
-        luminanceThreshold={0.6}
+        intensity={2.5}
+        luminanceThreshold={0.2}
         mipmapBlur
       />
       <ChromaticAberration
-        offset={chromaticOffset}
+        offset={new Vector2(0.003, 0.003)}
         radialModulation={false}
         modulationOffset={0}
       />
       <Vignette
-        offset={0.3}
-        darkness={0.7}
+        offset={0.4}
+        darkness={0.9}
         eskil={false}
       />
     </EffectComposer>

@@ -1,94 +1,132 @@
 import { create } from 'zustand';
-import { subscribeWithSelector } from 'zustand/middleware';
-import type { MinilabState, KnobValues, FaderValues, LooperState } from '../types';
+import type { LooperState } from '../types';
 
-const DEFAULT_KNOBS: KnobValues = {
-  cutoff: 0.5,
-  resonance: 0.3,
-  lfoRate: 0.3,
-  lfoDepth: 0.1,
-  delay: 0.25,
-  reverb: 0.4,
-  drive: 0.15,
-  pan: 0.5,
-};
+export interface MinilabState {
+  // Keyboard State
+  activeNotes: Set<string>;
+  octaveOffset: number;
+  pitchBend: number;
+  modulation: number;
 
-const DEFAULT_FADERS: FaderValues = {
-  attack: 0.08,
-  decay: 0.3,
-  sustain: 0.5,
-  release: 1.2,
-};
+  // Physical/Virtual Controls
+  knobs: {
+    cutoff: number;
+    resonance: number;
+    lfoRate: number;
+    lfoDepth: number;
+    delay: number;
+    reverb: number;
+    drive: number;
+    pan: number;
+  };
 
-export const useSynthStore = create<MinilabState>()(
-  subscribeWithSelector((set) => ({
-  isReady: false,
-  activeNotes: new Set<string>(),
+  faders: {
+    attack: number;
+    decay: number;
+    sustain: number;
+    release: number;
+  };
+
+  activePads: Set<number>;
+
+  // UI state
+  isReady: boolean;
+  currentNote: string;
+  looperState: LooperState;
+
+  // Actions
+  triggerNote: (note: string, velocity?: number) => void;
+  releaseNote: (note: string) => void;
+  triggerPad: (padId: number) => void;
+  releasePad: (padId: number) => void;
+  setKnob: (id: keyof MinilabState['knobs'], val: number) => void;
+  setFader: (id: keyof MinilabState['faders'], val: number) => void;
+  setPitchBend: (val: number) => void;
+  setModulation: (val: number) => void;
+  setOctaveOffset: (val: number) => void;
+  setReady: (val: boolean) => void;
+  setCurrentNote: (val: string) => void;
+  setLooperState: (val: LooperState) => void;
+}
+
+export const useSynthStore = create<MinilabState>((set) => ({
+  activeNotes: new Set(),
   octaveOffset: 0,
   pitchBend: 0,
   modulation: 0,
-  knobs: { ...DEFAULT_KNOBS },
-  faders: { ...DEFAULT_FADERS },
-  activePads: new Set<number>(),
-  looperState: 'idle' as LooperState,
+
+  knobs: {
+    cutoff: 0.8,
+    resonance: 0.2,
+    lfoRate: 0.5,
+    lfoDepth: 0.0,
+    delay: 0.1,
+    reverb: 0.2,
+    drive: 0.0,
+    pan: 0.0,
+  },
+
+  faders: {
+    attack: 0.05,
+    decay: 0.2,
+    sustain: 0.8,
+    release: 0.3,
+  },
+
+  activePads: new Set(),
+
+  isReady: false,
   currentNote: '',
+  looperState: 'idle' as LooperState,
 
-  triggerNote: (note) =>
-    set((state) => {
-      const next = new Set(state.activeNotes);
-      next.add(note);
-      return { activeNotes: next, currentNote: note };
-    }),
+  triggerNote: (note) => set((state) => {
+    const newNotes = new Set(state.activeNotes);
+    newNotes.add(note);
+    return { activeNotes: newNotes, currentNote: note };
+  }),
 
-  releaseNote: (note) =>
-    set((state) => {
-      const next = new Set(state.activeNotes);
-      next.delete(note);
-      const remaining = [...next];
-      return {
-        activeNotes: next,
-        currentNote: remaining.length > 0 ? (remaining[remaining.length - 1] ?? '') : '',
-      };
-    }),
+  releaseNote: (note) => set((state) => {
+    const newNotes = new Set(state.activeNotes);
+    newNotes.delete(note);
+    const remaining = [...newNotes];
+    return {
+      activeNotes: newNotes,
+      currentNote: remaining.length > 0 ? (remaining[remaining.length - 1] ?? '') : '',
+    };
+  }),
 
-  releaseAllNotes: () => set({ activeNotes: new Set<string>(), currentNote: '' }),
+  triggerPad: (padId) => set((state) => {
+    const newPads = new Set(state.activePads);
+    newPads.add(padId);
+    return { activePads: newPads };
+  }),
 
-  triggerPad: (padId) =>
-    set((state) => {
-      const next = new Set(state.activePads);
-      if (next.has(padId)) {
-        next.delete(padId);
-      } else {
-        next.add(padId);
-      }
-      return { activePads: next };
-    }),
+  releasePad: (padId) => set((state) => {
+    const newPads = new Set(state.activePads);
+    newPads.delete(padId);
+    return { activePads: newPads };
+  }),
 
-  setKnob: (id, value) =>
-    set((state) => ({
-      knobs: { ...state.knobs, [id]: Math.max(0, Math.min(1, value)) },
-    })),
+  setKnob: (id, val) => set((state) => ({
+    knobs: { ...state.knobs, [id]: Math.max(0, Math.min(1, val)) }
+  })),
 
-  setFader: (id, value) =>
-    set((state) => ({
-      faders: { ...state.faders, [id]: Math.max(0, Math.min(1, value)) },
-    })),
+  setFader: (id, val) => set((state) => ({
+    faders: { ...state.faders, [id]: Math.max(0, Math.min(1, val)) }
+  })),
 
-  setPitchBend: (value) =>
-    set({ pitchBend: Math.max(-1, Math.min(1, value)) }),
+  setPitchBend: (val) => set({ pitchBend: Math.max(-1, Math.min(1, val)) }),
 
-  setModulation: (value) =>
-    set({ modulation: Math.max(0, Math.min(1, value)) }),
+  setModulation: (val) => set({ modulation: Math.max(0, Math.min(1, val)) }),
 
-  setOctaveOffset: (offset) =>
-    set({ octaveOffset: Math.max(-3, Math.min(3, offset)) }),
+  setOctaveOffset: (val) => set({ octaveOffset: Math.max(-3, Math.min(3, val)) }),
 
-  setReady: (status) => set({ isReady: status }),
+  setReady: (val) => set({ isReady: val }),
 
-  setCurrentNote: (note) => set({ currentNote: note }),
+  setCurrentNote: (val) => set({ currentNote: val }),
 
-  setLooperState: (state) => set({ looperState: state }),
-})));
+  setLooperState: (val) => set({ looperState: val }),
+}));
 
 export const useIsReady = () => useSynthStore((s) => s.isReady);
 export const useCurrentNote = () => useSynthStore((s) => s.currentNote);
@@ -98,10 +136,5 @@ export const useActivePads = () => useSynthStore((s) => s.activePads);
 export const useOctaveOffset = () => useSynthStore((s) => s.octaveOffset);
 export const usePitchBend = () => useSynthStore((s) => s.pitchBend);
 export const useModulation = () => useSynthStore((s) => s.modulation);
-
-export const useKnob = (id: keyof KnobValues) =>
-  useSynthStore((s) => s.knobs[id]);
 export const useKnobs = () => useSynthStore((s) => s.knobs);
-export const useFader = (id: keyof FaderValues) =>
-  useSynthStore((s) => s.faders[id]);
 export const useFaders = () => useSynthStore((s) => s.faders);

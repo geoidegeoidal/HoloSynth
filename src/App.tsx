@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoadingScreen } from './components/LoadingScreen';
 import { HoloHUD } from './components/HoloHUD';
+import { MinilabUI } from './components/minilab/MinilabUI';
 import { useMidiController } from './hooks/useMidiController';
 
 const AudioEngine = lazy(() => import('./modules/audio/AudioEngine').then(m => ({ default: m.AudioEngine })));
@@ -18,6 +19,7 @@ function AppContent() {
       </Suspense>
       <LoadingScreen />
       <HoloHUD />
+      <MinilabUI />
     </div>
   );
 }
