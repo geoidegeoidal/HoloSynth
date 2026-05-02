@@ -39,11 +39,16 @@ const STYLES = `
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
 }
+@keyframes posRing {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
 `;
 
 export const HoloHUD = () => {
   const currentNote = useHoloStore((s) => s.currentNote);
   const angle = useHoloStore((s) => s.rightHand.angle);
+  const radius = useHoloStore((s) => s.rightHand.radius);
   const isVisible = useHoloStore((s) => s.rightHand.isVisible);
   const looperState = useHoloStore((s) => s.looperState) as LooperState;
   const waveformRef = useRef<HTMLCanvasElement>(null);
@@ -131,6 +136,14 @@ export const HoloHUD = () => {
   const activeIdx = SCALE.indexOf(currentNote as typeof SCALE[number]);
   const displayNote = currentNote || '—';
   const displayFreq = currentNote ? noteFreqLabel(currentNote) : '';
+  const noteColorStr = currentNote ? noteColor(currentNote) : '#00ffff';
+
+  // Map angle (0-360) to position on the arc (t parameter 0-1)
+  const arcT = (angle % 360) / 360;
+
+  // Position dot coordinates (mirrored for front camera)
+  const dotX = 1 - (angle % 360) / 360;  // mirrored X
+  const dotY = radius;
 
   const looperLabel: Record<LooperState, string> = {
     idle: 'SPACE to record',
@@ -150,9 +163,9 @@ export const HoloHUD = () => {
     <>
       <style>{STYLES}</style>
 
-      {/* Note arc */}
+      {/* Note arc with position indicator */}
       <div style={styles.noteArc}>
-        <svg viewBox="0 0 440 220" style={styles.arcSvg}>
+        <svg viewBox="0 0 440 240" style={styles.arcSvg}>
           {/* Background arc path */}
           <path
             d="M 50 200 A 170 170 0 0 1 390 200"
@@ -160,56 +173,49 @@ export const HoloHUD = () => {
             stroke="rgba(0,255,255,0.06)"
             strokeWidth="2"
           />
-          {/* Active arc segment */}
-          {isVisible && (() => {
-            const t = (angle % 360) / 360;
-            const startAngle = Math.PI;
-            const endAngle = Math.PI - t * Math.PI;
-            const cx = 220, cy = 200, r = 170;
-            const sx = cx + Math.cos(startAngle) * r;
-            const sy = cy - Math.sin(startAngle) * r;
-            const ex = cx + Math.cos(endAngle) * r;
-            const ey = cy - Math.sin(endAngle) * r;
-            const largeArc = t > 0.5 ? 1 : 0;
-            return (
-              <path
-                d={`M ${sx} ${sy} A ${r} ${r} 0 ${largeArc} 0 ${ex} ${ey}`}
-                fill="none"
-                stroke={noteColor(currentNote)}
-                strokeWidth="3"
-                opacity="0.5"
-                style={{ filter: `drop-shadow(0 0 6px ${noteColor(currentNote)})` }}
-              />
-            );
-          })()}
+
+          {/* Active arc segment (glow trail) */}
+          {isVisible && (
+            <path
+              d={`M 50 200 A 170 170 0 0 1 ${50 + arcT * 340} ${200 - Math.sin(arcT * Math.PI) * 170}`}
+              fill="none"
+              stroke={noteColorStr}
+              strokeWidth="3"
+              opacity="0.5"
+              style={{ filter: `drop-shadow(0 0 8px ${noteColorStr})` }}
+            />
+          )}
+
           {/* Note dots on arc */}
           {SCALE.map((note, i) => {
             const t = i / (SCALE.length - 1);
             const a = Math.PI - t * Math.PI;
-            const dotR = 170;
-            const cx = 220 + Math.cos(a) * dotR;
-            const cy = 200 - Math.sin(a) * dotR;
+            const cx = 220 + Math.cos(a) * 170;
+            const cy = 200 - Math.sin(a) * 170;
             const isActive = i === activeIdx && isVisible;
             const color = noteColor(note);
             return (
               <g key={note}>
                 {isActive && (
-                  <circle cx={cx} cy={cy} r="14" fill={color} opacity="0.25">
-                    <animate attributeName="r" values="14;22;14" dur="1s" repeatCount="indefinite" />
-                  </circle>
+                  <>
+                    <circle cx={cx} cy={cy} r="18" fill={color} opacity="0.15">
+                      <animate attributeName="r" values="18;28;18" dur="1.5s" repeatCount="indefinite" />
+                    </circle>
+                    <circle cx={cx} cy={cy} r="12" fill={color} opacity="0.3" />
+                  </>
                 )}
                 <circle
                   cx={cx} cy={cy}
-                  r={isActive ? 9 : 5}
+                  r={isActive ? 8 : 4}
                   fill={isActive ? color : 'transparent'}
-                  stroke={isActive ? color : 'rgba(255,255,255,0.12)'}
-                  strokeWidth={isActive ? 2 : 1}
+                  stroke={isActive ? color : 'rgba(255,255,255,0.1)'}
+                  strokeWidth={isActive ? 2.5 : 1}
                 />
                 <text
-                  x={cx} y={cy + 24}
+                  x={cx} y={cy + 26}
                   textAnchor="middle"
-                  fill={isActive ? color : 'rgba(255,255,255,0.18)'}
-                  fontSize={isActive ? 11 : 7}
+                  fill={isActive ? color : 'rgba(255,255,255,0.15)'}
+                  fontSize={isActive ? 12 : 7}
                   fontFamily="system-ui, monospace"
                   fontWeight={isActive ? 700 : 400}
                 >
@@ -218,37 +224,83 @@ export const HoloHUD = () => {
               </g>
             );
           })}
-          {/* Pointer needle */}
+
+          {/* Bright dot that follows hand position on arc */}
           {isVisible && (() => {
-            const t = (angle % 360) / 360;
-            const a = Math.PI - t * Math.PI;
+            const a = Math.PI - arcT * Math.PI;
             const px = 220 + Math.cos(a) * 170;
             const py = 200 - Math.sin(a) * 170;
             return (
-              <line x1={220} y1={200} x2={px} y2={py}
-                stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeDasharray="4 4" />
+              <g>
+                {/* Outer glow ring */}
+                <circle cx={px} cy={py} r="20" fill="none" stroke={noteColorStr} strokeWidth="1.5" opacity="0.4">
+                  <animate attributeName="r" values="20;28;20" dur="1.2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.4;0.1;0.4" dur="1.2s" repeatCount="indefinite" />
+                </circle>
+                {/* Inner bright dot */}
+                <circle cx={px} cy={py} r="6" fill={noteColorStr} opacity="0.9">
+                  <animate attributeName="r" values="6;8;6" dur="0.8s" repeatCount="indefinite" />
+                </circle>
+                {/* Center white core */}
+                <circle cx={px} cy={py} r="2.5" fill="#ffffff" opacity="0.95" />
+              </g>
             );
           })()}
-          {/* Scale name */}
-          <text x={220} y={195} textAnchor="middle" fill="rgba(0,255,255,0.15)"
-            fontSize="10" fontFamily="system-ui, monospace" letterSpacing="2">
+
+          {/* Scale label */}
+          <text x={220} y={215} textAnchor="middle" fill="rgba(0,255,255,0.12)"
+            fontSize="9" fontFamily="system-ui, monospace" letterSpacing="3">
             C DORIAN
           </text>
         </svg>
+
+        {/* Position circle below arc */}
+        <div style={styles.positionCircle}>
+          {/* Outer ring */}
+          <div style={{
+            ...styles.posOuterRing,
+            borderColor: isVisible ? `${noteColorStr}40` : 'rgba(255,255,255,0.06)',
+            boxShadow: isVisible ? `0 0 20px ${noteColorStr}20, inset 0 0 20px ${noteColorStr}10` : 'none',
+          }}>
+            {/* Crosshair lines */}
+            <div style={{ ...styles.crosshairH, background: isVisible ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)' }} />
+            <div style={{ ...styles.crosshairV, background: isVisible ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)' }} />
+
+            {/* Position dot */}
+            {isVisible && (
+              <div style={{
+                ...styles.posDot,
+                left: `${dotX * 100}%`,
+                top: `${dotY * 80 + 10}%`,
+                background: noteColorStr,
+                boxShadow: `0 0 12px ${noteColorStr}, 0 0 24px ${noteColorStr}80`,
+              }} />
+            )}
+
+            {/* Axis labels */}
+            <span style={{ ...styles.axisLabel, left: 4, top: '50%', transform: 'translateY(-50%)' }}>L</span>
+            <span style={{ ...styles.axisLabel, right: 4, top: '50%', transform: 'translateY(-50%)' }}>H</span>
+            <span style={{ ...styles.axisLabel, top: 4, left: '50%', transform: 'translateX(-50%)' }}>↑</span>
+            <span style={{ ...styles.axisLabel, bottom: 4, left: '50%', transform: 'translateX(-50%)' }}>↓</span>
+          </div>
+          <div style={{ ...styles.posLabel, color: isVisible ? noteColorStr + '80' : 'rgba(255,255,255,0.1)' }}>
+            POSITION
+          </div>
+        </div>
       </div>
 
       {/* Current note display */}
       <div style={styles.noteDisplay}>
         <div style={{
           ...styles.noteLetter,
-          color: currentNote ? noteColor(currentNote) : 'rgba(0,255,255,0.12)',
-          '--glow': currentNote ? noteColor(currentNote) : '#00ffff',
+          color: currentNote ? noteColorStr : 'rgba(0,255,255,0.12)',
+          '--glow': currentNote ? noteColorStr : '#00ffff',
           animation: currentNote && isVisible ? 'noteGlow 1.2s ease-in-out infinite' : 'none',
         } as React.CSSProperties}>
           {displayNote}
         </div>
         {displayFreq && isVisible && (
-          <div style={{ ...styles.freqLabel, color: noteColor(currentNote) + 'aa' }}>
+          <div style={{ ...styles.freqLabel, color: noteColorStr + 'aa' }}>
             {displayFreq}
           </div>
         )}
@@ -282,13 +334,68 @@ const styles: Record<string, React.CSSProperties> = {
     left: '50%',
     transform: 'translateX(-50%)',
     width: 440,
-    height: 220,
     zIndex: 800,
     pointerEvents: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   arcSvg: {
     width: '100%',
-    height: '100%',
+    height: 'auto',
+  },
+  positionCircle: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: -8,
+  },
+  posOuterRing: {
+    width: 80,
+    height: 80,
+    borderRadius: '50%',
+    border: '1.5px solid',
+    position: 'relative',
+    overflow: 'hidden',
+    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+  },
+  posDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    transform: 'translate(-50%, -50%)',
+    transition: 'left 0.08s ease, top 0.08s ease, background 0.15s ease',
+  },
+  crosshairH: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    height: 1,
+    transform: 'translateY(-50%)',
+  },
+  crosshairV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '50%',
+    width: 1,
+    transform: 'translateX(-50%)',
+  },
+  axisLabel: {
+    position: 'absolute',
+    fontSize: 7,
+    fontFamily: 'system-ui, monospace',
+    color: 'rgba(255,255,255,0.15)',
+    pointerEvents: 'none',
+  },
+  posLabel: {
+    fontSize: 7,
+    fontFamily: 'system-ui, monospace',
+    letterSpacing: 2,
+    transition: 'color 0.15s ease',
   },
   noteDisplay: {
     position: 'fixed',
