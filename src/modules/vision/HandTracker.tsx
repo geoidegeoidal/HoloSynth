@@ -88,7 +88,8 @@ export const HandTracker: React.FC = () => {
           err instanceof DOMException &&
           (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
         useHoloStore.getState().setCameraStatus(isDenied ? 'denied' : 'error');
-        useHoloStore.getState().setReady(false);
+        // Marcar como ready igualmente — la app funciona sin cámara
+        useHoloStore.getState().setReady(true);
       }
     };
 
