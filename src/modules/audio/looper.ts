@@ -1,21 +1,16 @@
 import * as Tone from 'tone';
 import { angleToNote } from './synthCore';
 import { useHoloStore } from '../../store/useHoloStore';
+import type { LooperState } from '../../types';
 import type { LeftHandGesture } from '../../types';
 
-/**
- * Evento de nota grabado por el looper.
- */
 interface LoopEvent {
-  /** Offset en segundos desde el inicio del loop */
   time: number;
   note: string;
   duration: string;
 }
 
-type LooperState = 'idle' | 'recording' | 'playing' | 'muted';
-
-const MAX_LOOP_DURATION_S = 8; // ~4 compases a 120bpm
+const MAX_LOOP_DURATION_S = 8;
 const NOTE_DURATION = '8n';
 
 let looperState: LooperState = 'idle';
@@ -23,28 +18,40 @@ let recordBuffer: LoopEvent[] = [];
 let recordStartTime = 0;
 let loopPart: Tone.Part | null = null;
 let previousGesture: LeftHandGesture = 'none';
+let loopSynth: Tone.PolySynth | null = null;
+let loopFilter: Tone.Filter | null = null;
+let loopGain: Tone.Gain | null = null;
+let analyser: Tone.Analyser | null = null;
 
-/**
- * Inicia la grabación del loop. Limpia el buffer anterior si existe.
- */
+export function initLooper(): void {
+  loopSynth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'fatsawtooth', spread: 15, count: 2 },
+    envelope: { attack: 0.03, decay: 0.15, sustain: 0.4, release: 0.6 },
+  });
+
+  loopFilter = new Tone.Filter({ type: 'lowpass', frequency: 3000, Q: 1 });
+  loopGain = new Tone.Gain(0.45);
+  analyser = new Tone.Analyser('waveform', 256);
+
+  loopSynth.chain(loopFilter, loopGain, analyser, Tone.getDestination());
+}
+
 function startRecording(): void {
   stopPlayback();
   recordBuffer = [];
   recordStartTime = Tone.now();
   looperState = 'recording';
+  useHoloStore.getState().setLooperState('recording');
 
-  // Iniciar Transport si no está corriendo
   if (Tone.getTransport().state !== 'started') {
     Tone.getTransport().start();
   }
 }
 
-/**
- * Detiene la grabación y comienza la reproducción en loop.
- */
 function stopRecordingAndPlay(): void {
   if (recordBuffer.length === 0) {
     looperState = 'idle';
+    useHoloStore.getState().setLooperState('idle');
     return;
   }
 
@@ -53,14 +60,14 @@ function stopRecordingAndPlay(): void {
     MAX_LOOP_DURATION_S,
   );
 
-  // Crear un Part con los eventos grabados
-  loopPart = new Tone.Part((time, event: LoopEvent) => {
-    const { rightHand } = useHoloStore.getState();
-    if (!rightHand.isVisible) return;
+  if (!loopSynth) {
+    looperState = 'idle';
+    useHoloStore.getState().setLooperState('idle');
+    return;
+  }
 
-    // Reutilizar el synth principal — importar desde synthCore no funciona
-    // porque necesitamos los nodos. En su lugar, creamos un synth dedicado al looper.
-    loopSynth.triggerAttackRelease(event.note, event.duration, time);
+  loopPart = new Tone.Part((time, event: LoopEvent) => {
+    loopSynth?.triggerAttackRelease(event.note, event.duration, time);
   }, recordBuffer.map(e => [e.time, e] as [number, LoopEvent]));
 
   loopPart.loop = true;
@@ -68,11 +75,9 @@ function stopRecordingAndPlay(): void {
   loopPart.start(0);
 
   looperState = 'playing';
+  useHoloStore.getState().setLooperState('playing');
 }
 
-/**
- * Detiene la reproducción del loop sin borrar el buffer.
- */
 function stopPlayback(): void {
   if (loopPart) {
     loopPart.stop();
@@ -81,68 +86,27 @@ function stopPlayback(): void {
   }
 }
 
-/**
- * Mutea el loop (no lo borra).
- */
 function muteLoop(): void {
   if (loopPart) {
     loopPart.mute = true;
   }
   looperState = 'muted';
+  useHoloStore.getState().setLooperState('muted');
 }
 
-/**
- * Desmutea el loop.
- */
 function unmuteLoop(): void {
   if (loopPart) {
     loopPart.mute = false;
   }
   looperState = 'playing';
+  useHoloStore.getState().setLooperState('playing');
 }
 
-// Synth dedicado para el looper — cadena ligera
-let loopSynth: Tone.PolySynth;
-
-/**
- * Inicializa el synth del looper. Llamar después de Tone.start().
- */
-export function initLooper(): void {
-  loopSynth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: {
-      type: 'fatsawtooth',
-      spread: 15,
-      count: 2,
-    },
-    envelope: {
-      attack: 0.03,
-      decay: 0.15,
-      sustain: 0.4,
-      release: 0.6,
-    },
-  });
-
-  const filter = new Tone.Filter({
-    type: 'lowpass',
-    frequency: 3000,
-    Q: 1,
-  });
-
-  const gain = new Tone.Gain(0.45);
-
-  loopSynth.chain(filter, gain, Tone.getDestination());
-}
-
-/**
- * Graba una nota en el buffer del looper si estamos en estado 'recording'.
- * Se invoca desde el tick del AudioEngine cuando cambia la nota activa.
- */
 export function recordNote(angle: number): void {
   if (looperState !== 'recording') return;
 
   const elapsed = Tone.now() - recordStartTime;
   if (elapsed > MAX_LOOP_DURATION_S) {
-    // Auto-stop al alcanzar el límite de duración
     stopRecordingAndPlay();
     return;
   }
@@ -154,12 +118,7 @@ export function recordNote(angle: number): void {
   });
 }
 
-/**
- * Máquina de estados del looper, controlada por gestos de la mano izquierda.
- * Debe invocarse en cada frame del tick del AudioEngine.
- */
 export function updateLooper(gesture: LeftHandGesture): void {
-  // Solo actuar en transiciones de gesto (edge-triggered)
   if (gesture === previousGesture) return;
 
   const prev = previousGesture;
@@ -167,53 +126,83 @@ export function updateLooper(gesture: LeftHandGesture): void {
 
   switch (looperState) {
     case 'idle':
-      if (gesture === 'pinch') {
-        startRecording();
-      }
+      if (gesture === 'pinch') startRecording();
       break;
-
     case 'recording':
-      if (gesture === 'open' || (prev === 'pinch' && gesture !== 'pinch')) {
-        stopRecordingAndPlay();
-      }
+      if (gesture === 'open' || (prev === 'pinch' && gesture !== 'pinch')) stopRecordingAndPlay();
       break;
-
     case 'playing':
-      if (gesture === 'fist') {
-        muteLoop();
-      } else if (gesture === 'pinch') {
-        // Nuevo pinch → re-grabar (sobrescribir loop anterior)
-        startRecording();
-      }
+      if (gesture === 'fist') muteLoop();
+      else if (gesture === 'pinch') startRecording();
       break;
-
     case 'muted':
-      if (gesture === 'open') {
-        unmuteLoop();
-      } else if (gesture === 'pinch') {
-        // Re-grabar desde muted
-        startRecording();
-      }
+      if (gesture === 'open') unmuteLoop();
+      else if (gesture === 'pinch') startRecording();
       break;
   }
 }
 
-/**
- * Limpieza total del looper.
- */
+export function toggleRecord(): void {
+  if (looperState === 'idle') {
+    startRecording();
+  } else if (looperState === 'recording') {
+    stopRecordingAndPlay();
+  }
+}
+
+export function toggleMute(): void {
+  if (looperState === 'playing') {
+    muteLoop();
+  } else if (looperState === 'muted') {
+    unmuteLoop();
+  }
+}
+
+export function clearLoop(): void {
+  stopPlayback();
+  recordBuffer = [];
+  looperState = 'idle';
+  useHoloStore.getState().setLooperState('idle');
+}
+
+export function getLooperState(): LooperState {
+  return looperState;
+}
+
+export function getWaveformData(): Float32Array {
+  if (!analyser) return new Float32Array(0);
+  return analyser.getValue() as Float32Array;
+}
+
+export function getRecordBuffer(): LoopEvent[] {
+  return recordBuffer;
+}
+
+export function getLoopDuration(): number {
+  if (recordBuffer.length === 0) return 0;
+  return Math.min(recordBuffer[recordBuffer.length - 1]!.time, MAX_LOOP_DURATION_S);
+}
+
 export function disposeLooper(): void {
   stopPlayback();
   recordBuffer = [];
   looperState = 'idle';
   previousGesture = 'none';
+  useHoloStore.getState().setLooperState('idle');
   if (loopSynth) {
     loopSynth.dispose();
+    loopSynth = null;
   }
-}
-
-/**
- * Expone el estado actual del looper (para debug/UI).
- */
-export function getLooperState(): LooperState {
-  return looperState;
+  if (loopFilter) {
+    loopFilter.dispose();
+    loopFilter = null;
+  }
+  if (loopGain) {
+    loopGain.dispose();
+    loopGain = null;
+  }
+  if (analyser) {
+    analyser.dispose();
+    analyser = null;
+  }
 }

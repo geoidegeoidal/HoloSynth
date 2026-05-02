@@ -6,16 +6,9 @@ import {
   disposeSynthChain,
   angleToNote,
 } from './synthCore';
-import { initLooper, recordNote, updateLooper, disposeLooper } from './looper';
+import { initLooper, recordNote, updateLooper, disposeLooper, toggleRecord, toggleMute, clearLoop } from './looper';
 import { useHoloStore } from '../../store/useHoloStore';
 
-/**
- * AudioEngine — componente headless que conecta el store de Zustand
- * con el grafo de audio de Tone.js y el sistema de looper.
- *
- * Maneja el `Tone.start()` al primer clic del usuario para cumplir
- * con las políticas de autoplay del navegador.
- */
 export const AudioEngine: React.FC = () => {
   const audioStartedRef = useRef(false);
   const rafIdRef = useRef<number>(0);
@@ -29,23 +22,22 @@ export const AudioEngine: React.FC = () => {
       initLooper();
       audioStartedRef.current = true;
 
-      // Loop de actualización fuera del ciclo de React
       const tick = () => {
         const { rightHand, leftHandGesture } = useHoloStore.getState();
         updateSynthParams(rightHand.angle, rightHand.radius, rightHand.isVisible);
 
-        // Grabar nota en el looper cuando cambia
+        const note = rightHand.isVisible ? angleToNote(rightHand.angle) : '';
+        useHoloStore.getState().setCurrentNote(note);
+
         if (rightHand.isVisible) {
-          const currentNote = angleToNote(rightHand.angle);
-          if (currentNote !== prevNoteRef.current) {
+          if (note !== prevNoteRef.current) {
             recordNote(rightHand.angle);
-            prevNoteRef.current = currentNote;
+            prevNoteRef.current = note;
           }
         } else {
           prevNoteRef.current = null;
         }
 
-        // Actualizar máquina de estados del looper
         updateLooper(leftHandGesture);
 
         rafIdRef.current = requestAnimationFrame(tick);
@@ -57,22 +49,35 @@ export const AudioEngine: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Registrar listener global para el primer gesto del usuario
-    const handler = () => {
+    const startHandler = () => {
       void startAudioContext();
-      window.removeEventListener('click', handler);
-      window.removeEventListener('touchstart', handler);
-      window.removeEventListener('keydown', handler);
+      window.removeEventListener('click', startHandler);
+      window.removeEventListener('touchstart', startHandler);
+      window.removeEventListener('keydown', startHandler);
     };
 
-    window.addEventListener('click', handler);
-    window.addEventListener('touchstart', handler);
-    window.addEventListener('keydown', handler);
+    window.addEventListener('click', startHandler);
+    window.addEventListener('touchstart', startHandler);
+    window.addEventListener('keydown', startHandler);
+
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        toggleRecord();
+      } else if (e.code === 'KeyM') {
+        toggleMute();
+      } else if (e.code === 'KeyC') {
+        clearLoop();
+      }
+    };
+
+    window.addEventListener('keydown', keyHandler);
 
     return () => {
-      window.removeEventListener('click', handler);
-      window.removeEventListener('touchstart', handler);
-      window.removeEventListener('keydown', handler);
+      window.removeEventListener('click', startHandler);
+      window.removeEventListener('touchstart', startHandler);
+      window.removeEventListener('keydown', startHandler);
+      window.removeEventListener('keydown', keyHandler);
       cancelAnimationFrame(rafIdRef.current);
       disposeLooper();
       disposeSynthChain();
@@ -81,4 +86,3 @@ export const AudioEngine: React.FC = () => {
 
   return null;
 };
-

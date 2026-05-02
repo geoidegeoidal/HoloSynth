@@ -1,13 +1,21 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { initializeHandLandmarker, startTracking } from './handLandmarker';
 import { calculatePolarData } from './spatialMath';
 import { detectGesture } from './gestureDetector';
 import { useHoloStore } from '../../store/useHoloStore';
 import type { LeftHandGesture } from '../../types';
 
-export const HandTracker: React.FC = () => {
+export interface HandTrackerHandle {
+  getVideoElement: () => HTMLVideoElement | null;
+}
+
+export const HandTracker = forwardRef<HandTrackerHandle>((_props, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const gestureHistoryRef = useRef<LeftHandGesture[]>([]);
+
+  useImperativeHandle(ref, () => ({
+    getVideoElement: () => videoRef.current,
+  }));
 
   useEffect(() => {
     const video = videoRef.current;
@@ -52,8 +60,6 @@ export const HandTracker: React.FC = () => {
             const handednessInfo = results.handednesses[i];
             const handedness = handednessInfo ? handednessInfo[0]!.categoryName : 'Left';
             
-            // MediaPipe in video stream without horizontal flip logic outputs "Left" for the user's right hand
-            // and "Right" for the user's left hand when using the front-facing camera.
             const isUserRightHand = handedness === 'Left';
             
             if (isUserRightHand) {
@@ -88,7 +94,6 @@ export const HandTracker: React.FC = () => {
           err instanceof DOMException &&
           (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
         useHoloStore.getState().setCameraStatus(isDenied ? 'denied' : 'error');
-        // Marcar como ready igualmente — la app funciona sin cámara
         useHoloStore.getState().setReady(true);
       }
     };
@@ -113,4 +118,4 @@ export const HandTracker: React.FC = () => {
       muted
     />
   );
-};
+});
