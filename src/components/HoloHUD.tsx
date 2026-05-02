@@ -1,14 +1,15 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useHoloStore } from '../store/useHoloStore';
 import { getWaveformData, getRecordBuffer, getLoopDuration } from '../modules/audio/looper';
+import { SCALE } from '../modules/audio/synthCore';
 import type { LooperState } from '../types';
 
-const SCALE = ['C3','Eb3','F3','G3','Bb3','C4','Eb4','F4','G4','Bb4','C5'] as const;
 const NOTE_COLORS: Record<string, string> = {
-  'C3': '#ff0055', 'Eb3': '#ff3388', 'F3': '#cc00ff',
-  'G3': '#7700ff', 'Bb3': '#3300ff', 'C4': '#0066ff',
-  'Eb4': '#00ccff', 'F4': '#00ffcc', 'G4': '#00ff55',
-  'Bb4': '#66ff00', 'C5': '#ccff00',
+  'C3': '#ff0044', 'D3': '#ff3377', 'Eb3': '#dd00ff',
+  'F3': '#8800ff', 'G3': '#4400ff', 'A3': '#0055ff',
+  'Bb3': '#0099ff', 'C4': '#00ddff', 'D4': '#00ffdd',
+  'Eb4': '#00ff88', 'F4': '#33ff33', 'G4': '#88ff00',
+  'A4': '#ccff00', 'Bb4': '#ffee00', 'C5': '#ffcc00',
 };
 
 function noteColor(note: string): string {
@@ -17,8 +18,10 @@ function noteColor(note: string): string {
 
 function noteFreqLabel(note: string): string {
   const freqMap: Record<string, number> = {
-    'C3': 130.81, 'Eb3': 155.56, 'F3': 174.61, 'G3': 196.00, 'Bb3': 233.08,
-    'C4': 261.63, 'Eb4': 311.13, 'F4': 349.23, 'G4': 392.00, 'Bb4': 466.16, 'C5': 523.25,
+    'C3': 130.81, 'D3': 146.83, 'Eb3': 155.56, 'F3': 174.61,
+    'G3': 196.00, 'A3': 220.00, 'Bb3': 233.08,
+    'C4': 261.63, 'D4': 293.66, 'Eb4': 311.13, 'F4': 349.23,
+    'G4': 392.00, 'A4': 440.00, 'Bb4': 466.16, 'C5': 523.25,
   };
   return freqMap[note] ? `${Math.round(freqMap[note]!)}Hz` : '';
 }
@@ -32,9 +35,9 @@ const STYLES = `
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
-@keyframes waveformSlide {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+@keyframes camPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 `;
 
@@ -61,8 +64,8 @@ export const HoloHUD = () => {
     const now = performance.now() / 1000;
 
     if (looperState === 'idle' && buffer.length === 0) {
-      const idleBarW = 2;
       const idleSpacing = 4;
+      const idleBarW = 2;
       ctx.fillStyle = 'rgba(0, 255, 255, 0.08)';
       for (let x = 0; x < w; x += idleSpacing) {
         const barH = Math.sin(x * 0.05 + now * 2) * 4 + 6;
@@ -147,45 +150,66 @@ export const HoloHUD = () => {
     <>
       <style>{STYLES}</style>
 
-      {/* Note arc — top center */}
+      {/* Note arc */}
       <div style={styles.noteArc}>
-        <svg viewBox="0 0 400 200" style={styles.arcSvg}>
-          {/* Arc path */}
+        <svg viewBox="0 0 440 220" style={styles.arcSvg}>
+          {/* Background arc path */}
           <path
-            d="M 40 180 A 160 160 0 0 1 360 180"
+            d="M 50 200 A 170 170 0 0 1 390 200"
             fill="none"
-            stroke="rgba(0,255,255,0.08)"
+            stroke="rgba(0,255,255,0.06)"
             strokeWidth="2"
           />
-          {/* Note markers on arc */}
+          {/* Active arc segment */}
+          {isVisible && (() => {
+            const t = (angle % 360) / 360;
+            const startAngle = Math.PI;
+            const endAngle = Math.PI - t * Math.PI;
+            const cx = 220, cy = 200, r = 170;
+            const sx = cx + Math.cos(startAngle) * r;
+            const sy = cy - Math.sin(startAngle) * r;
+            const ex = cx + Math.cos(endAngle) * r;
+            const ey = cy - Math.sin(endAngle) * r;
+            const largeArc = t > 0.5 ? 1 : 0;
+            return (
+              <path
+                d={`M ${sx} ${sy} A ${r} ${r} 0 ${largeArc} 0 ${ex} ${ey}`}
+                fill="none"
+                stroke={noteColor(currentNote)}
+                strokeWidth="3"
+                opacity="0.5"
+                style={{ filter: `drop-shadow(0 0 6px ${noteColor(currentNote)})` }}
+              />
+            );
+          })()}
+          {/* Note dots on arc */}
           {SCALE.map((note, i) => {
             const t = i / (SCALE.length - 1);
             const a = Math.PI - t * Math.PI;
-            const cx = 200 + Math.cos(a) * 150;
-            const cy = 180 - Math.sin(a) * 150;
+            const dotR = 170;
+            const cx = 220 + Math.cos(a) * dotR;
+            const cy = 200 - Math.sin(a) * dotR;
             const isActive = i === activeIdx && isVisible;
             const color = noteColor(note);
             return (
               <g key={note}>
                 {isActive && (
-                  <circle cx={cx} cy={cy} r="14" fill={color} opacity="0.2">
+                  <circle cx={cx} cy={cy} r="14" fill={color} opacity="0.25">
                     <animate attributeName="r" values="14;22;14" dur="1s" repeatCount="indefinite" />
                   </circle>
                 )}
                 <circle
-                  cx={cx}
-                  cy={cy}
+                  cx={cx} cy={cy}
                   r={isActive ? 9 : 5}
                   fill={isActive ? color : 'transparent'}
-                  stroke={isActive ? color : 'rgba(255,255,255,0.15)'}
+                  stroke={isActive ? color : 'rgba(255,255,255,0.12)'}
                   strokeWidth={isActive ? 2 : 1}
                 />
                 <text
-                  x={cx}
-                  y={cy + 26}
+                  x={cx} y={cy + 24}
                   textAnchor="middle"
-                  fill={isActive ? color : 'rgba(255,255,255,0.25)'}
-                  fontSize={isActive ? 11 : 8}
+                  fill={isActive ? color : 'rgba(255,255,255,0.18)'}
+                  fontSize={isActive ? 11 : 7}
                   fontFamily="system-ui, monospace"
                   fontWeight={isActive ? 700 : 400}
                 >
@@ -195,38 +219,32 @@ export const HoloHUD = () => {
             );
           })}
           {/* Pointer needle */}
-          {isVisible && (
-            <>
-              {(() => {
-                const t = (angle % 360) / 360;
-                const a = Math.PI - t * Math.PI;
-                const px = 200 + Math.cos(a) * 150;
-                const py = 180 - Math.sin(a) * 150;
-                return (
-                  <line
-                    x1={200} y1={180}
-                    x2={px} y2={py}
-                    stroke="rgba(255,255,255,0.6)"
-                    strokeWidth="1.5"
-                    strokeDasharray="4 4"
-                  />
-                );
-              })()}
-            </>
-          )}
+          {isVisible && (() => {
+            const t = (angle % 360) / 360;
+            const a = Math.PI - t * Math.PI;
+            const px = 220 + Math.cos(a) * 170;
+            const py = 200 - Math.sin(a) * 170;
+            return (
+              <line x1={220} y1={200} x2={px} y2={py}
+                stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeDasharray="4 4" />
+            );
+          })()}
+          {/* Scale name */}
+          <text x={220} y={195} textAnchor="middle" fill="rgba(0,255,255,0.15)"
+            fontSize="10" fontFamily="system-ui, monospace" letterSpacing="2">
+            C DORIAN
+          </text>
         </svg>
       </div>
 
-      {/* Current note display — center */}
+      {/* Current note display */}
       <div style={styles.noteDisplay}>
-        <div
-          style={{
-            ...styles.noteLetter,
-            color: currentNote ? noteColor(currentNote) : 'rgba(0,255,255,0.15)',
-            '--glow': currentNote ? noteColor(currentNote) : '#00ffff',
-            animation: currentNote && isVisible ? 'noteGlow 1.2s ease-in-out infinite' : 'none',
-          } as React.CSSProperties}
-        >
+        <div style={{
+          ...styles.noteLetter,
+          color: currentNote ? noteColor(currentNote) : 'rgba(0,255,255,0.12)',
+          '--glow': currentNote ? noteColor(currentNote) : '#00ffff',
+          animation: currentNote && isVisible ? 'noteGlow 1.2s ease-in-out infinite' : 'none',
+        } as React.CSSProperties}>
           {displayNote}
         </div>
         {displayFreq && isVisible && (
@@ -236,9 +254,8 @@ export const HoloHUD = () => {
         )}
       </div>
 
-      {/* Bottom bar: waveform + looper controls */}
+      {/* Bottom bar */}
       <div style={styles.bottomBar}>
-        {/* Looper controls */}
         <div style={styles.looperControls}>
           <div style={{ ...styles.looperBadge, background: looperColor[looperState] }}>
             {looperState === 'recording' && (
@@ -247,25 +264,12 @@ export const HoloHUD = () => {
             {looperLabel[looperState]}
           </div>
           <div style={styles.keyHints}>
-            <span style={styles.keyHint}>
-              <kbd style={styles.kbd}>SPACE</kbd> rec/stop
-            </span>
-            <span style={styles.keyHint}>
-              <kbd style={styles.kbd}>M</kbd> mute
-            </span>
-            <span style={styles.keyHint}>
-              <kbd style={styles.kbd}>C</kbd> clear
-            </span>
+            <span style={styles.keyHint}><kbd style={styles.kbd}>SPACE</kbd> rec/stop</span>
+            <span style={styles.keyHint}><kbd style={styles.kbd}>M</kbd> mute</span>
+            <span style={styles.keyHint}><kbd style={styles.kbd}>C</kbd> clear</span>
           </div>
         </div>
-
-        {/* Waveform */}
-        <canvas
-          ref={waveformRef}
-          width={600}
-          height={80}
-          style={styles.waveform}
-        />
+        <canvas ref={waveformRef} width={600} height={80} style={styles.waveform} />
       </div>
     </>
   );
@@ -277,8 +281,8 @@ const styles: Record<string, React.CSSProperties> = {
     top: 0,
     left: '50%',
     transform: 'translateX(-50%)',
-    width: 400,
-    height: 200,
+    width: 440,
+    height: 220,
     zIndex: 800,
     pointerEvents: 'none',
   },

@@ -1,9 +1,8 @@
 import * as Tone from 'tone';
 
-// Escala pentatónica menor C3–C5 (11 notas)
 const SCALE: readonly string[] = [
-  'C3', 'Eb3', 'F3', 'G3', 'Bb3',
-  'C4', 'Eb4', 'F4', 'G4', 'Bb4',
+  'C3', 'D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3',
+  'C4', 'D4', 'Eb4', 'F4', 'G4', 'A4', 'Bb4',
   'C5',
 ] as const;
 
@@ -14,6 +13,7 @@ export interface SynthNodes {
   synth: Tone.PolySynth;
   filter: Tone.Filter;
   distortion: Tone.Distortion;
+  delay: Tone.PingPongDelay;
   reverb: Tone.Reverb;
   gain: Tone.Gain;
 }
@@ -21,10 +21,6 @@ export interface SynthNodes {
 let nodes: SynthNodes | null = null;
 let currentNote: string | null = null;
 
-/**
- * Construye el grafo de audio:
- * PolySynth → Filter (LPF) → Distortion (sutil) → Reverb → Gain (VCA) → Destination
- */
 export function createSynthChain(): SynthNodes {
   if (nodes) return nodes;
 
@@ -35,58 +31,55 @@ export function createSynthChain(): SynthNodes {
       count: 3,
     },
     envelope: {
-      attack: 0.05,
-      decay: 0.2,
-      sustain: 0.6,
-      release: 0.8,
+      attack: 0.08,
+      decay: 0.3,
+      sustain: 0.5,
+      release: 1.2,
     },
   });
+
+  synth.set({ portamento: 0.15 });
 
   const filter = new Tone.Filter({
     type: 'lowpass',
     frequency: MIN_FILTER_FREQ,
     rolloff: -24,
-    Q: 2,
+    Q: 3,
   });
 
   const distortion = new Tone.Distortion({
-    distortion: 0.15,
-    wet: 0.3,
+    distortion: 0.12,
+    wet: 0.2,
+  });
+
+  const delay = new Tone.PingPongDelay({
+    delayTime: '8n',
+    feedback: 0.35,
+    wet: 0.25,
   });
 
   const reverb = new Tone.Reverb({
-    decay: 3,
-    wet: 0.35,
+    decay: 5,
+    wet: 0.45,
   });
 
   const gain = new Tone.Gain(0);
 
-  synth.chain(filter, distortion, reverb, gain, Tone.getDestination());
+  synth.chain(filter, distortion, delay, reverb, gain, Tone.getDestination());
 
-  nodes = { synth, filter, distortion, reverb, gain };
+  nodes = { synth, filter, distortion, delay, reverb, gain };
   return nodes;
 }
 
-/**
- * Cuantiza `angle` (0–360°) a un índice de la escala pentatónica.
- */
 export function angleToNote(angle: number): string {
   const idx = Math.floor((angle / 360) * SCALE.length) % SCALE.length;
   return SCALE[idx]!;
 }
 
-/**
- * Mapea `radius` (0–1) a frecuencia de corte del LPF (escala exponencial).
- * 0 → 200 Hz, 1 → 8000 Hz
- */
 export function radiusToFilterFreq(radius: number): number {
   return MIN_FILTER_FREQ * Math.pow(MAX_FILTER_FREQ / MIN_FILTER_FREQ, radius);
 }
 
-/**
- * Actualiza los parámetros del synth en función de los datos del store.
- * Se invoca a ~30fps desde el componente AudioEngine.
- */
 export function updateSynthParams(
   angle: number,
   radius: number,
@@ -115,25 +108,22 @@ export function updateSynthParams(
   }
 }
 
-/**
- * Libera todas las notas activas — seguridad ante desmontaje.
- */
 export function releaseAll(): void {
   if (!nodes) return;
   nodes.synth.releaseAll();
   currentNote = null;
 }
 
-/**
- * Destruye el grafo de audio por completo.
- */
 export function disposeSynthChain(): void {
   if (!nodes) return;
   releaseAll();
   nodes.synth.dispose();
   nodes.filter.dispose();
   nodes.distortion.dispose();
+  nodes.delay.dispose();
   nodes.reverb.dispose();
   nodes.gain.dispose();
   nodes = null;
 }
+
+export { SCALE };
