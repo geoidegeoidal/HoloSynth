@@ -1,8 +1,8 @@
 import { Suspense, lazy } from 'react';
 
-const HandTracker = lazy(() => import('./modules/vision/HandTracker'));
-const AudioEngine = lazy(() => import('./modules/audio/AudioEngine'));
-const SynthCanvas = lazy(() => import('./modules/visual/SynthCanvas'));
+const HandTracker = lazy(() => import('./modules/vision/HandTracker').then(m => ({ default: m.HandTracker })));
+const AudioEngine = lazy(() => import('./modules/audio/AudioEngine').then(m => ({ default: m.AudioEngine })));
+const SynthCanvas = lazy(() => import('./modules/visual/SynthCanvas').then(m => ({ default: m.SynthCanvas })));
 
 function App() {
   return (
