@@ -8,11 +8,12 @@ import {
   ParticleField,
 } from './components/SceneElements';
 import { GestureEffects } from './components/GestureEffects';
+import { PostEffects } from './PostEffects';
 
 /**
  * SynthCanvas — Escena 3D principal con estética Synthwave/Holográfico.
  * Contiene el toroide central, indicador de posición, partículas,
- * grid retro y efectos de gestos.
+ * grid retro, efectos de gestos y post-procesamiento.
  */
 export const SynthCanvas: React.FC = () => {
   return (
@@ -39,6 +40,9 @@ export const SynthCanvas: React.FC = () => {
         <RetroGrid />
         <ParticleField />
         <GestureEffects />
+
+        {/* Post-procesamiento */}
+        <PostEffects />
 
         {/* Controles de debug (removibles en producción) */}
         <OrbitControls

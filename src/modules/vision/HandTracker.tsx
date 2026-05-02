@@ -24,6 +24,8 @@ export const HandTracker: React.FC = () => {
         
         if (!isComponentMounted) return;
         
+        useHoloStore.getState().setCameraStatus('active');
+        
         video.srcObject = stream;
         
         await new Promise<void>((resolve) => {
@@ -82,6 +84,10 @@ export const HandTracker: React.FC = () => {
         });
       } catch (err) {
         console.error("Error initializing HandTracker:", err);
+        const isDenied =
+          err instanceof DOMException &&
+          (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
+        useHoloStore.getState().setCameraStatus(isDenied ? 'denied' : 'error');
         useHoloStore.getState().setReady(false);
       }
     };

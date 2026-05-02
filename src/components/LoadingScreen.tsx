@@ -1,0 +1,100 @@
+import { useIsReady } from '../store/useHoloStore';
+
+const KEYFRAMES = `
+@keyframes holoPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+@keyframes holoSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`;
+
+export const LoadingScreen = () => {
+  const isReady = useIsReady();
+
+  if (isReady) return null;
+
+  return (
+    <>
+      <style>{KEYFRAMES}</style>
+      <div style={styles.overlay}>
+        <div style={styles.content}>
+          <div style={styles.ring}>
+            <div style={{ ...styles.ringInner, animation: 'holoSpin 3s linear infinite' }} />
+          </div>
+          <h1 style={styles.title}>HoloSynth</h1>
+          <p style={styles.subtitle}>Initializing hand tracking model...</p>
+          <div style={styles.bar}>
+            <div style={{ ...styles.barFill, animation: 'holoPulse 1.5s ease-in-out infinite' }} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'radial-gradient(ellipse at center, #0a0a20 0%, #050510 70%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    transition: 'opacity 0.5s ease',
+  },
+  content: {
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 20,
+  },
+  ring: {
+    width: 80,
+    height: 80,
+    borderRadius: '50%',
+    border: '2px solid #00ffff30',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringInner: {
+    width: 50,
+    height: 50,
+    borderRadius: '50%',
+    border: '2px solid transparent',
+    borderTopColor: '#00ffff',
+    borderRightColor: '#ff00ff',
+  },
+  title: {
+    color: '#00ffff',
+    fontSize: 32,
+    fontWeight: 700,
+    margin: 0,
+    fontFamily: 'system-ui, sans-serif',
+    letterSpacing: 3,
+  },
+  subtitle: {
+    color: '#6666aa',
+    fontSize: 13,
+    margin: 0,
+    fontFamily: 'system-ui, monospace',
+  },
+  bar: {
+    width: 200,
+    height: 3,
+    borderRadius: 2,
+    background: '#ffffff10',
+    overflow: 'hidden',
+  },
+  barFill: {
+    width: '40%',
+    height: '100%',
+    borderRadius: 2,
+    background: 'linear-gradient(90deg, #00ffff, #ff00ff)',
+  },
+};
