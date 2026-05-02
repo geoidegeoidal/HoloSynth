@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useIsReady } from '../store/useHoloStore';
 
 const KEYFRAMES = `
@@ -9,23 +10,43 @@ const KEYFRAMES = `
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 `;
 
 export const LoadingScreen = () => {
   const isReady = useIsReady();
+  const [dismissed, setDismissed] = useState(false);
 
-  if (isReady) return null;
+  useEffect(() => {
+    if (isReady) {
+      const timer = setTimeout(() => setDismissed(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isReady]);
+
+  if (dismissed) return null;
 
   return (
     <>
       <style>{KEYFRAMES}</style>
-      <div style={styles.overlay}>
+      <div
+        style={{
+          ...styles.overlay,
+          animation: isReady ? 'fadeOut 0.8s ease forwards' : undefined,
+          pointerEvents: isReady ? 'none' : 'auto',
+        }}
+      >
         <div style={styles.content}>
           <div style={styles.ring}>
             <div style={{ ...styles.ringInner, animation: 'holoSpin 3s linear infinite' }} />
           </div>
           <h1 style={styles.title}>HoloSynth</h1>
-          <p style={styles.subtitle}>Initializing hand tracking model...</p>
+          <p style={styles.subtitle}>
+            {isReady ? 'Ready' : 'Initializing hand tracking model...'}
+          </p>
           <div style={styles.bar}>
             <div style={{ ...styles.barFill, animation: 'holoPulse 1.5s ease-in-out infinite' }} />
           </div>
@@ -39,12 +60,12 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'radial-gradient(ellipse at center, #0a0a20 0%, #050510 70%)',
+    background: 'radial-gradient(ellipse at center, rgba(10,10,32,0.85) 0%, rgba(5,5,16,0.92) 70%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
-    transition: 'opacity 0.5s ease',
+    backdropFilter: 'blur(6px)',
   },
   content: {
     textAlign: 'center',
@@ -98,3 +119,4 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'linear-gradient(90deg, #00ffff, #ff00ff)',
   },
 };
+
