@@ -4,7 +4,7 @@
 
 # 🌌 HoloSynth Pro
 
-**Sintetizador Virtual y Estación de Producción — Inspirado en Arturia Minilab 3**
+**Prototipo experimental de sintetizador web con interfaz 3D y control MIDI**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -15,6 +15,8 @@
 </div>
 
 <br/>
+
+> **Estado: prototipo experimental.** La compatibilidad MIDI, el audio y el rendimiento dependen del navegador y los dispositivos; no se presenta como estación de producción profesional.
 
 ## 🎯 Visión General
 
@@ -82,3 +84,4 @@ Para probar el motor DSP inmediatamente antes de conectar un teclado MIDI, utili
 <div align="center">
   <p>Construido por <b>DeepSeek V4 Pro</b> & <b>Gemini 3.1 Pro</b> con amor por el sonido sintético.</p>
 </div>
+
