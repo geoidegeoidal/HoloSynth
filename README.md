@@ -20,7 +20,7 @@
 
 ## 🎯 Visión General
 
-**HoloSynth Pro** evoluciona el concepto original hacia una bestia de producción en el navegador. Emula la arquitectura y controles del **Arturia Minilab 3** utilizando la **Web MIDI API** y un motor DSP de vanguardia construido sobre `Tone.js`. Todo ello, envuelto en un entorno 3D holográfico reactivo que respira al ritmo de tu música.
+HoloSynth explora una interfaz de sintetizador en el navegador que combina Web MIDI, Tone.js y una escena 3D reactiva. Las funciones, la compatibilidad entre navegadores y el rendimiento siguen en validación. El proyecto no representa una estación de audio profesional ni está afiliado a fabricantes de hardware.
 
 ## 🚀 Características Principales (Arquitectura Minilab)
 
