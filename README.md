@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="./public/banner.png" alt="HoloSynth Pro Banner" width="100%" style="border-radius: 12px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);" />
+<img src="./public/banner.png" alt="Banner de HoloSynth Pro" width="100%" />
 
 # 🌌 HoloSynth Pro
 
-**Prototipo experimental de sintetizador web con interfaz 3D y control MIDI**
+**Síntesis de audio, controles virtuales y una escena 3D reactiva en el navegador.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -12,76 +12,87 @@
 [![Tone.js](https://img.shields.io/badge/Tone.js-000000?style=for-the-badge)](https://tonejs.github.io/)
 [![Zustand](https://img.shields.io/badge/Zustand-443E38?style=for-the-badge)](https://github.com/pmndrs/zustand)
 
+[Inicio rápido](#inicio-rápido) · [Controles](#controles) · [MIDI](#midi-experimental) · [Arquitectura](#arquitectura)
+
 </div>
 
-<br/>
+> **Estado: prototipo experimental.** El audio, MIDI y el rendimiento dependen del navegador y los dispositivos. No es una estación de producción profesional ni está afiliado a fabricantes de hardware.
 
-> **Estado: prototipo experimental.** La compatibilidad MIDI, el audio y el rendimiento dependen del navegador y los dispositivos; no se presenta como estación de producción profesional.
+## Inicio rápido
 
-## 🎯 Visión General
+Necesitas Git, Node.js y pnpm, además de un navegador con WebGL 2.0 y Web Audio API. Para una base compatible con Vite y ESLint del lockfile, utiliza **Node.js 22.13 o posterior dentro de la rama 22**. El repositorio incluye `pnpm-lock.yaml`.
 
-HoloSynth explora una interfaz de sintetizador en el navegador que combina Web MIDI, Tone.js y una escena 3D reactiva. Las funciones, la compatibilidad entre navegadores y el rendimiento siguen en validación. El proyecto no representa una estación de audio profesional ni está afiliado a fabricantes de hardware.
+```bash
+git clone https://github.com/geoidegeoidal/HoloSynth.git
+cd HoloSynth
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-## 🚀 Características Principales (Arquitectura Minilab)
+Abre la dirección local que muestra Vite. Interactúa con la página para habilitar el audio y empieza con las teclas del piano virtual; no necesitas un controlador MIDI para explorar la interfaz.
 
-- **🎹 Motor PolySynth:** Osciladores *fatsawtooth* polifónicos con ruteo de efectos de nivel de estudio (Filtros Lowpass, LFO, Distorsión, Delay, Reverb).
-- **🎛️ Modulación Virtual:** Envolvente ADSR mapeada a Faders y matriz de modulación mapeada a Knobs y Strips virtuales.
-- **🥁 Drum Machine TR-808:** Síntesis pura (cero samples externos) para 8 pads de percusión reactivos (Kick, Snare, Hats, Toms, Clap, Crash).
-- **🎥 HoloTorus Reactivo:** El fondo 3D no es un video. Es un renderizado en tiempo real (R3F) conectado directamente a la salida Master de audio mediante un nodo `Tone.Meter`. El holograma, las partículas y el *bloom* cinematográfico laten y cambian de color matemáticamente.
-- **⚡ Estado Atómico:** Gestión de latencia ultra-baja gestionado por `Zustand`. La UI y el motor de sonido se suscriben atómicamente evitando re-renders en el hilo principal.
+| Comando | Propósito |
+|---|---|
+| `pnpm dev` | Servidor de desarrollo. |
+| `pnpm build` | Comprobación TypeScript y compilación de producción. |
+| `pnpm preview` | Previsualización local del resultado de `pnpm build`. |
+| `pnpm lint` | Análisis estático con ESLint. |
 
-## 🧠 Arquitectura DSP & Ruteo
+## Qué puedes explorar
+
+- **Motor PolySynth:** síntesis polifónica con osciladores *fatsawtooth*, filtro, LFO, distorsión, delay y reverb.
+- **Controles virtuales:** faders ADSR, knobs, pitch bend y modulación.
+- **Percusión sintetizada:** ocho pads con sonidos de batería, sin samples externos.
+- **Escena reactiva:** un toroide, partículas y efectos visuales vinculados al audio.
+- **Estado compartido:** Zustand conecta la interfaz con los motores de sonido.
+
+## Controles
+
+El piano virtual se puede tocar con el ratón. Para una primera prueba con el teclado del ordenador:
+
+| Entrada | Acción |
+|---|---|
+| `Z X C V B N M` | Primeras siete teclas blancas del piano. |
+| `←` o `↓` | Bajar una octava. |
+| `→` o `↑` | Subir una octava. |
+| `0` | Restablecer la octava. |
+
+El mapeo completo está en [VirtualPiano.tsx](src/components/minilab/VirtualPiano.tsx). Los controles y la compatibilidad siguen en validación.
+
+## MIDI experimental
+
+El proyecto **ya incluye** un [controlador Web MIDI](src/hooks/useMidiController.ts), activado desde [App.tsx](src/App.tsx); no es únicamente una función prevista. El hook procesa notas, pitch bend y mensajes CC para knobs, faders y modulación.
+
+El acceso requiere que el navegador exponga Web MIDI y permita utilizar el dispositivo. Si la API no está disponible o se deniega el permiso, no se conectará el controlador. Los mensajes CC están definidos en el hook: no se garantiza que coincidan con la configuración de todos los teclados físicos.
+
+## Arquitectura
 
 ```mermaid
 graph LR
-  K[⌨️ Teclas / Pads] --> Z[(📦 Zustand Store)]
-  Z -->|Selectores Atómicos| M[🎛️ Minilab Engine]
-  Z -->|Selectores Atómicos| D[🥁 Drum Machine]
-  
-  M -->|Tone.PolySynth| F[Filter / LFO]
+  K[Teclas y pads] --> Z[(Zustand)]
+  MIDI[Web MIDI] --> Z
+  Z --> M[Minilab Engine]
+  Z --> D[Drum Machine]
+  M --> F[Filter / LFO]
   F --> FX[Distortion / Delay / Reverb]
   D --> FX
   FX --> VM[Master Volume]
-  
   VM --> TM((Tone.Meter))
-  TM -.->|Reactividad Visual a 60FPS| R[🎨 R3F HoloTorus]
-  VM --> OUT[🔈 Salida de Audio]
+  TM -.-> R[Escena 3D reactiva]
+  VM --> OUT[Salida de audio]
 ```
-
-## 🛠️ Stack Tecnológico
 
 | Módulo | Tecnología | Propósito |
 |---|---|---|
-| **Motor de Audio DSP** | `Tone.js` | Síntesis, routing, generadores de ruido puro. |
-| **Entorno 3D** | `@react-three/fiber` + `postprocessing` | Renderizado, Bloom extremo, viñeta cinematográfica. |
-| **Control de Estado** | `Zustand` | Evita bloqueos en el UI, conectando el teclado al motor. |
-| **Interacción** | `Web MIDI API` (Próximamente) | Soporte nativo para conectar tu propio Minilab físico. |
+| Audio | Tone.js | Síntesis, efectos y percusión. |
+| Escena 3D | React Three Fiber + postprocessing | Renderizado y efectos visuales. |
+| Estado | Zustand | Conectar controles, notas y parámetros de audio. |
+| Interacción física | Web MIDI API | Entrada MIDI experimental según navegador y permisos. |
 
-## 🚦 Puesta en Marcha
-
-Arranca el motor de audio en tu máquina local. Se requiere soporte para WebGL 2.0 y Web Audio API.
-
-```bash
-# Instalar dependencias
-npm install
-
-# Lanzar entorno de producción / desarrollo
-npm run dev
-```
-*(Haz click en la pantalla al iniciar para activar el AudioContext del navegador).*
-
-## 🎹 Atajos Rápidos (Testing Mode)
-
-Para probar el motor DSP inmediatamente antes de conectar un teclado MIDI, utiliza el modo **QWERTY Piano**:
-
-- **Teclas Blancas:** `A`, `S`, `D`, `F`, `G`, `H`, `J`, `K`
-- **Teclas Negras:** `W`, `E`, `T`, `Y`, `U`
-
-*Nota: Al presionar una tecla, el Toroide Holográfico central vibrará, expandirá su escala y cambiará su espectro cromático entre Cyan y Magenta reactivamente.*
+El [plan de implementación](docs/implementation_plan.md) conserva el contexto de diseño; describe también objetivos y no sustituye la verificación de las funciones actuales.
 
 ---
 
 <div align="center">
-  <p>Construido por <b>DeepSeek V4 Pro</b> & <b>Gemini 3.1 Pro</b> con amor por el sonido sintético.</p>
+  <p>Construido por <b>DeepSeek V4 Pro</b> &amp; <b>Gemini 3.1 Pro</b> con amor por el sonido sintético.</p>
 </div>
-
